@@ -4,7 +4,7 @@ set -e
 # Helper script to update the net-admin software, 
 # support checking, downloading, and installation of the software. 
 
-VERSION_URL="https://raw.githubusercontent.com/sevenrobots/net-admin/refs/heads/master"
+VERSION_URL="https://raw.githubusercontent.com/sevenrobots/net-admin/refs/heads/main"
 echo "VERSION_URL: ${VERSION_URL}" 
 
 PACKAGE_URL="https://github.com/sevenrobots/net-admin/releases/download"
