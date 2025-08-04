@@ -346,8 +346,7 @@ class WebsocketServer(object):
         self._thread = None 
 
     # handle client connection
-    async def handler(self, websocket, **kwargs):
-        print(kwargs)
+    async def handler(self, websocket, path):
         logger.info(f"Websocket connection from {websocket.remote_address[0]}") 
         connection = WebsocketConnection(websocket)
         self._connections.add(connection)

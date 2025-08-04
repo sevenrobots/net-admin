@@ -4,6 +4,7 @@ set -e
 # depedent software and tools   
 sudo apt-get update \
     && sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+        curl \
         python3-websockets \
         python3-netifaces \
     && sudo apt-get autoremove \
