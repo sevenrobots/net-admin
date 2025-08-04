@@ -470,8 +470,8 @@ def run_service(config_file = None):
 import argparse
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Network Admin Service")
-    parser.add_argument("--config_file", "-c", type=str, default="net-admin.json")
-    parser.add_argument("--log_level", type=str, default="DEBUG")
+    parser.add_argument("--config_file", "-c", type=str)
+    parser.add_argument("--log_level", default="DEBUG", type=str)
 
     # parser.print_help()
     args = parser.parse_args()
