@@ -346,7 +346,8 @@ class WebsocketServer(object):
         self._thread = None 
 
     # handle client connection
-    async def handler(self, websocket):
+    async def handler(self, websocket, **kwargs):
+        print(kwargs)
         logger.info(f"Websocket connection from {websocket.remote_address[0]}") 
         connection = WebsocketConnection(websocket)
         self._connections.add(connection)
@@ -396,7 +397,7 @@ class WebServer(object):
         def do_GET(self):
             logger.info(f"HTTP request for {self.path}")
             if self.path == "/": 
-                self.path = "/net-admin.html" 
+                self.path = "/admin.html" 
             elif not self.path.endswith(".html"): 
                 html_path = self.path + ".html" 
                 if os.path.exists(self.translate_path(html_path)):
