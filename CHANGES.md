@@ -1,3 +1,7 @@
+## [0.2.1] = 2025-08-07
+### Fixed 
+- Keep current SSID and password for WiFi AP 
+
 ## [0.2] = 2025-08-07
 ### Changed 
 - Move update script out of system folder to simplify the update 

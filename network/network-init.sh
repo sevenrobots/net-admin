@@ -26,10 +26,11 @@ echo "BASH_DIR: ${BASH_DIR}"
 
 # wpa_supplicant is used to manage the WiFi client connection 
 # but it needs to be started after the ap, triggered by dhcpcd 
-# also trying to find current SSID/password to simplify the installation/update 
+
+# try to keep current SSID and password 
 # wpa_supplicant.conf required "ssid" and "psk" in double quotes  
 FILE="/etc/wpa_supplicant/wpa_supplicant.conf"
-echo "Find SSID/password in ${FILE}"
+echo "Find current SSID and PSK in ${FILE}"
 SSID=$(sudo grep "^[[:space:]]*ssid[[:space:]]*=" ${FILE} | cut -d'=' -f2)
 PSK=$(sudo grep "^[[:space:]]*psk[[:space:]]*=" ${FILE} | cut -d'=' -f2) 
 echo "SSID: ${SSID}" 
@@ -37,7 +38,7 @@ echo "PSK: ${PSK}"
 
 if [ -z "${SSID}" ]; then 
     FILE=$(find "/etc/NetworkManager/system-connections" -name "*.nmconnections")
-    echo "FILE: ${FILE}" 
+    echo "Find current SSID and PSK in ${FILE}" 
     if [ -n "${FILE}" ]; then 
         echo "Find SSID/password in ${FILE}"
         SSID=$(sudo grep "^[[:space:]]*ssid[[:space:]]*=" ${FILE} | cut -d'=' -f2 | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
@@ -50,48 +51,67 @@ if [ -z "${SSID}" ]; then
 fi 
 
 if [ -n "${SSID}" ]; then 
+    echo "Using current SSID:${SSID} and PSK:${PSK}" 
     cat "${BASH_DIR}/config/wpa_supplicant.conf"
     echo "" 
-    echo "Replace SSID/password..." 
     sed -i "s/^\([[:space:]]*ssid[[:space:]]*=\)[[:space:]]*.*/\1${SSID}/" "${BASH_DIR}/config/wpa_supplicant.conf"
     sed -i "s/^\([[:space:]]*psk[[:space:]]*=\)[[:space:]]*.*/\1${PSK}/" "${BASH_DIR}/config/wpa_supplicant.conf"
     cat "${BASH_DIR}/config/wpa_supplicant.conf"
     echo "" 
 fi 
 
-echo "Configuring wpa_supplicant..."
+echo "Apply configuration for wpa_supplicant..."
 sudo cp -f ${BASH_DIR}/config/wpa_supplicant.conf /etc/wpa_supplicant/wpa_supplicant.conf 
 sudo chmod 600 /etc/wpa_supplicant/wpa_supplicant.conf 
 echo "Disable wap_supplicant service" 
 sudo systemctl disable wpa_supplicant
 
 # hostapd is used to manage the WiFi AP connection 
-# but it swill be start by systemd service, after uap0 created 
-echo "Configuring hostapd..."  
+# but it will be start by systemd service, after uap0 created 
+
+# try to keep current SSID and password 
+FILE="/etc/hostapd/hostapd.conf"
+echo "Find current SSID and PSK in ${FILE}"
+SSID=$(sudo grep "^[[:space:]]*ssid[[:space:]]*=" ${FILE} | cut -d'=' -f2)
+PSK=$(sudo grep "^[[:space:]]*wpa_passphrase[[:space:]]*=" ${FILE} | cut -d'=' -f2) 
+echo "SSID: ${SSID}" 
+echo "PSK: ${PSK}" 
+
+if [ -n "${SSID}" ]; then 
+    echo "Using current SSID:${SSID} and PSK:${PSK}" 
+    cat "${BASH_DIR}/config/hostapd.conf"
+    echo "" 
+    sed -i "s/^\([[:space:]]*ssid[[:space:]]*=\)[[:space:]]*.*/\1${SSID}/" "${BASH_DIR}/config/hostapd.conf"
+    sed -i "s/^\([[:space:]]*wpa_passphrase[[:space:]]*=\)[[:space:]]*.*/\1${PSK}/" "${BASH_DIR}/config/hostapd.conf"
+    cat "${BASH_DIR}/config/hostapd.conf"
+    echo "" 
+fi 
+
+echo "Apply configuration for hostapd..."  
 sudo cp -f ${BASH_DIR}/config/hostapd.conf /etc/hostapd/hostapd.conf 
 sudo chmod 600 /etc/hostapd/hostapd.conf
 sudo systemctl disable hostapd
 
 # create uap0 on system startup and delete it with wifi stopped 
-echo "Creating uap0..." 
+echo "Creating WiFi AP interface uap0..." 
 sudo cp -f ${BASH_DIR}/config/uap@.service /etc/systemd/system/uap@.service  
 sudo chmod 644 /etc/systemd/system/uap@.service 
 sudo systemctl enable uap@0
 sudo rfkill unblock wlan 
 
 # config dhcpcd with DHCP client for wlan0 and static IP for uap0 
-echo "Configuring dhcpcd..." 
+echo "Apply configuration for dhcpcd..." 
 sudo cp -f /usr/share/dhcpcd/hooks/10-wpa_supplicant /usr/lib/dhcpcd/dhcpcd-hooks/10-wpa_supplicant
 sudo cp -f ${BASH_DIR}/config/dhcpcd.conf /etc/dhcpcd.conf 
 sudo chmod 600 /etc/dhcpcd.conf 
 
 # config dnsmasq with DHCP server for uap0   
-echo "Configuring dnsmasq..." 
+echo "Apply configuration for dnsmasq..." 
 sudo cp -f ${BASH_DIR}/config/dnsmasq.conf /etc/dnsmasq.conf 
 sudo chmod 600 /etc/dnsmasq.conf 
 
 # config routing between uap0 and eth0/wlan0 
-echo "Configuring route table..." 
+echo "Apply configuration for routing table..." 
 sudo cp -f ${BASH_DIR}/config/routed-ap.conf /etc/sysctl.d/routed-ap.conf 
 sudo chmod 600 /etc/sysctl.d/routed-ap.conf 
 
@@ -103,5 +123,5 @@ sudo netfilter-persistent save
 
 # reboot system 
 echo "Configuration done!" 
-echo "Please restart system with: sudo shutdown -r now" 
-# sudo shutdown -r now 
+echo "Please restart system with: sudo reboot" 
+# sudo reboot 
