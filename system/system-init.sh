@@ -13,15 +13,15 @@ sudo apt-get update \
 
 # important locations   
 SYSTEM_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)" 
-NET_ADMIN_HOME="$(cd "${SYSTEM_DIR}/.." && pwd)" 
+ADMIN_HOME="$(cd "${SYSTEM_DIR}/../web-ui" && pwd)" 
 echo "SYSTEM_DIR: ${SYSTEM_DIR}" 
-echo "NET_ADMIN_HOME: ${NET_ADMIN_HOME}" 
+echo "ADMIN_HOME: ${ADMIN_HOME}" 
 
 # install entry script for net-admin  
 echo "Install net-admin start script..." 
 cat "${SYSTEM_DIR}/net-admin.sh" 
 echo "" 
-sed -i "s/^\([[:space:]]*NET_ADMIN_HOME[[:space:]]*=\)[[:space:]]*.*/\1\"${NET_ADMIN_HOME//\//\\/}\"/" "${SYSTEM_DIR}/net-admin.sh"
+sed -i "s/^\([[:space:]]*ADMIN_HOME[[:space:]]*=\)[[:space:]]*.*/\1\"${ADMIN_HOME//\//\\/}\"/" "${SYSTEM_DIR}/net-admin.sh"
 cat "${SYSTEM_DIR}/net-admin.sh" 
 echo "" 
 sudo cp -r ${SYSTEM_DIR}/net-admin.sh /usr/local/bin/net-admin.sh 

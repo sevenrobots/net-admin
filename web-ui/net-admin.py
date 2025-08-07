@@ -89,11 +89,15 @@ class WebsocketConnection(object):
         logger.info(f"{self.system_dir=}") 
         logger.info(f"{self.updates_dir=}") 
 
-    # send a message to client 
+    # send back a message to client 
+    # do not interrupt the processing in any way 
     async def send_response(self, response): 
-        logger.info(f"Send response: {response}")
-        message = json.dumps(response)  
-        await self._websocket.send(message)
+        try: 
+            logger.info(f"Send response: {response}")
+            message = json.dumps(response)  
+            await self._websocket.send(message)
+        except Exception as e: 
+            logger.warning(f"Error to send response: {e}")
 
     # status message 
     async def send_status_response(self, code = -1, message = "", id = None): 
@@ -105,22 +109,17 @@ class WebsocketConnection(object):
         logger.info("Send result response...")
         await self.send_response({ "result": result, "id": id }) 
 
-    # handle requests until the connection is closed  
+    # handle requests 
+    # only interrupted by disconnection (error in receiving) 
     async def handle_requests(self): 
-        try: 
-            async for message in self._websocket: 
-                try: 
-                    request = json.loads(message) 
-                    logger.info(f"Request received: {request}")
-                    await self.handle_request(request)
-                except websockets.exceptions.ConnectionClosed: 
-                    raise 
-                except Exception as e: 
-                    logger.warning(f"Error while handling request: {e}")
-        except websockets.exceptions.ConnectionClosed:
-            raise 
-        except Exception as e: 
-            logger.error(f"Error while handling requests: {e}")
+        async for message in self._websocket: 
+            try: 
+                request = json.loads(message) 
+                logger.info(f"Request received: {request}")
+                await self.handle_request(request)
+            except Exception as e: 
+                logger.warning(f"Error to handle request: {e}")
+                await self.send_status_response(-1, f"{message}:{e}", 0)
 
     async def handle_request(self, request): 
         assert(isinstance(request, dict))
@@ -130,11 +129,14 @@ class WebsocketConnection(object):
         logger.debug(f"{method=}")
         logger.debug(f"{params=}") 
         logger.debug(f"{id=}") 
-        if method in self._handlers: 
-            await self._handlers[method](params=params, id=id) 
-        else: 
-            logger.warning(f"Method not in list: {self._handlers.keys()}") 
-            await self.send_status_response(-1, "Unsupported method", id)
+        try: 
+            if method not in self._handlers: 
+                logger.warning(f"{method} is not in {self._handlers.keys()}") 
+                raise Exception(f"Unsupported method: {method}", id) 
+            else: 
+                await self._handlers[method](params=params, id=id) 
+        except Exception as e: 
+            await self.send_status_response(-1, str(e), id)
 
     async def check_system_status(self, params = None, id = None): 
         logger.info("check_system_status") 
@@ -142,42 +144,35 @@ class WebsocketConnection(object):
 
     async def restart_system(self, params = None, id = None): 
         logger.warning("restart_system")
-        try: 
-            code = bash_run_d(["sudo", "-b", "bash", "-c", "sleep 5; reboot"]) 
-            if code == 0: 
-                await self.send_status_response(-1, "System restart, please reconnect later", id) 
-            else: 
-                 await self.send_status_response(code, "Failed to restart the system", id) 
-        except Exception as e: 
-            logger.warning(f"Error to restart the system: {e}") 
-            await self.send_status_response(-1, "Error to restart the system", id)
+        code = bash_run_d(["sudo", "-b", "bash", "-c", "sleep 5; reboot"]) 
+        if code == 0: 
+            logger.info("Restart system successfully")
+            await self.send_status_response(-1, "System restart, please reconnect later", id) 
+        else: 
+            logger.info(f"Failed to restart system: {code}")
+            raise Exception(f"Failed to restart system: {code}") 
 
     async def shutdown_system(self, params = None, id = None): 
         logger.warning("shutdown_system")
-        try: 
-            code = bash_run_d(["sudo", "-b", "bash", "-c", "sleep 5; shutdown now"])  
-            if code == 0: 
-                await self.send_status_response(-1, "System shutdown in seconds", id) 
-            else: 
-                 await self.send_status_response(code, "Failed to shutdown the system", id) 
-        except Exception as e: 
-            logger.warning(f"Error to shutdown the system: {e}") 
-            await self.send_status_response(-1, "Error to shutdown the system", id)
+        code = bash_run_d(["sudo", "-b", "bash", "-c", "sleep 5; shutdown now"])  
+        if code == 0: 
+            logger.info("Shutdown system successfully")
+            await self.send_status_response(-1, "System shutdown in 10 seconds", id) 
+        else: 
+            logger.info(f"Failed to shutdown system: {code}")
+            raise Exception(f"Failed to shutdown system: {code}") 
    
     async def check_software_versions(self, params = None, id = None): 
         logger.info("check_software_versions")
-        try: 
-            code = bash_run([os.path.join(self.system_dir, "updates.sh"), "check"])
-            if code == 0: 
-                logger.info("Software updates checked successfully")
-                await self.send_status_response(0, "Software updates checked successfully", id)
-            else: 
-                logger.warning("Failed to check software updates")
-                await self.send_status_response(code, "Failed to check software updates", id)
-        except Exception as e: 
-            logger.warning(f"Error to check software updates: {e}") 
-            await self.send_status_response(-1, "Error to check software updates", id) 
-
+        # first try to check software updates 
+        code = bash_run([os.path.join(self.software_dir, "updates.sh"), "check"])
+        if code == 0: 
+            logger.info("Check software updates successfully")
+            await self.send_status_response(0, "Check software updates successfully", id)
+        else: 
+            logger.warning(f"Failed to check software updates: {code}")
+            await self.send_status_response(-1, f"Failed to check software updates: {code}", id)
+        # collection versions info 
         installed_version = None 
         try: 
             version_file = os.path.join(self.software_dir, "VERSION.txt")
@@ -190,8 +185,8 @@ class WebsocketConnection(object):
                         installed_version = value.strip()
                         break 
         except Exception as e: 
-            logger.warning(f"Error check installed version: {e}")
-            await self.send_status_response(-1, "Error to check installed version", id)
+            logger.warning(f"Error to check installed version: {e}")
+            await self.send_status_response(-1, f"Error to check installed version: {e}", id)
         logger.info(f"{installed_version=}")
 
         latest_version = None 
@@ -209,7 +204,7 @@ class WebsocketConnection(object):
                         fallback_version = value.strip() 
         except Exception as e: 
             logger.warning(f"Error to check updated versions: {e}")
-            await self.send_status_response(-1, "Error to check updated versions", id)    
+            await self.send_status_response(-1, f"Error to check updated versions: {e}", id)    
         logger.info(f"{latest_version=}")
         logger.info(f"{fallback_version=}")
 
@@ -225,41 +220,40 @@ class WebsocketConnection(object):
         version = params["version"] if "version" in params else None 
         logger.info(f"{version=}")
         if version:
-            try: 
-                logger.info(f"install software {version}") 
-                await self.send_status_response(0, "Installation takes time, please wait...", id) 
-                code = bash_run([os.path.join(self.system_dir, "updates.sh"), "install", version]) 
-                if code == 0: 
-                    await self.send_status_response(code, f"Software {version} installed successfully", id) 
-                    await self.restart_system(id = id)
-                else: 
-                    await self.send_status_response(code, f"Failed to install software {version}", id) 
-            except Exception as e: 
-                logger.warning(f"Error to install software: {e}") 
-                await self.send_status_response(-1, f"Error to install software {version}", id) 
+            logger.info(f"install software {version}") 
+            await self.send_status_response(-1, "Installation takes time, please wait...", id) 
+            code = bash_run([os.path.join(self.software_dir, "updates.sh"), "install", version]) 
+            if code == 0: 
+                logger.info(f"Software {version} installed successfully")
+                await self.send_status_response(0, f"Software {version} installed successfully", id) 
+                await self.restart_system(id = id)
+            else: 
+                logger.warning(f"Failed to install software: {code}")
+                await self.send_status_response(-1, f"Failed to install software: {code}", id) 
         else: 
-            await self.send_status_response(-1, "Software version is not set", id)
+            raise Exception("Software version is not set")
 
     async def check_wifi_ap_status(self, params = None, id = None): 
         logger.info("check_wifi_ap_status")
+        # check SSID and password 
         try: 
             ssid, password = check_wifi_ap_id() 
             logger.info(f"{ssid=}") 
             logger.info(f"{password=}")
             if ssid is None: 
-                await self.send_status_response(0, "WiFi AP is not setup", id) 
+                await self.send_status_response(-1, "WiFi AP is not setup", id) 
         except Exception as e: 
-            logger.warning(f"Error checking wifi ap: {e}")
-            await self.send_status_response(-1, "Error to check WiFi AP", id)  
-            
+            logger.warning(f"Error to check WiFi API: {e}")
+            await self.send_status_response(-1, f"Error to check WiFi AP: {e}", id)  
+        # check IP address 
         try: 
             address = check_network_addr("uap0")
             logger.info(f"uap0: {address}")
             if address is None: 
-                await self.send_status_response(-1, "WiFi is not activated" , id) 
+                await self.send_status_response(-1, "WiFi AP is not activated" , id) 
         except Exception as e: 
-            logger.waning(f"Error to check wifi IP address: {e}") 
-            await self.send_status_response(-1, "Error to check IP address", id)
+            logger.waning(f"Error to check IP address: {e}") 
+            await self.send_status_response(-1, f"Error to check IP address: {e}", id)
             
         result = {
             "setup": { "ssid": ssid, "password": password }, 
@@ -269,10 +263,11 @@ class WebsocketConnection(object):
 
     async def setup_wifi_ap(self, params = None, id = None): 
         logger.info(f"setup_wifi_ap: {params}") 
-        await self.send_status_response(-1, "Not implemented", id)
+        await self.send_status_response(-1, "Not implemented", id) 
 
     async def check_wifi_sta_status(self, params = None, id = None): 
         logger.info("check_wifi_sta_status")
+        # check SSID and password
         try: 
             ssid, password = check_wifi_sta_id() 
             logger.info(f"{ssid=}")
@@ -281,8 +276,8 @@ class WebsocketConnection(object):
                 await self.send_status_response(0, "WiFi STA is not setup", id) 
         except Exception as e: 
             logger.warning(f"Error to check wifi sta: {e}")
-            await self.send_status_response(-1, "Error to check WiFi STA", id)  
-        
+            await self.send_status_response(-1, f"Error to check WiFi STA: {e}", id)  
+        # check IP address 
         try: 
             address = check_network_addr("wlan0")
             logger.info(f"wlan0: {address}")
@@ -290,7 +285,7 @@ class WebsocketConnection(object):
                 await self.send_status_response(-1, "WiFi is not connected" , id)
         except Exception as e: 
             logger.waning(f"Error to check IP address: {e}") 
-            await self.send_status_response(-1, "Error to check IP address", id)
+            await self.send_status_response(-1, f"Error to check IP address: {e}", id)
             
         result = {
             "setup": { "ssid": ssid, "password": password }, 
@@ -303,6 +298,7 @@ class WebsocketConnection(object):
         if "ssid" in params: 
             ssid = params["ssid"] 
             password = params["password"] if "password" in params else None 
+            # validate SSID 
             try: 
                 logger.info("check wifi settings")
                 current_ssid, current_password = check_wifi_sta_id() 
@@ -314,28 +310,17 @@ class WebsocketConnection(object):
             if ssid == current_ssid and password == current_password: 
                 await self.send_status_response(-1, "WiFi settings has no change", id)
             else: 
-                try: 
-                    code = bash_run([os.path.join(self.network_dir, "setup-wifi-sta.sh"), ssid, password])
-                    if code == 0: 
-                        await self.send_status_response(code, "WiFi settings changed", id) 
-                        try: 
-                            logger.info("restart network") 
-                            script = os.path.join(self.network_dir, "restart-wifi.sh")
-                            code = bash_run_d(["sudo", "-b", "bash", "-c", f"sleep 5; bash {script}"])
-                            if code == 0: 
-                                await self.send_status_response(-1, "Network restart, please reconnect later", id)
-                            else: 
-                                await self.send_status_response(code, "Failed to restart network", id)
-                        except Exception as e: 
-                            await self.send_status_response(-1, "Error to restart network", id)
-                    else: 
-                        await self.send_status_response(code, "Failed to change WiFi settings", id) 
-                except Exception as e: 
-                    logger.warning(f"Error to change wifi settings: {e}") 
-                    await self.send_status_response(-1, "Error to change WiFi settings", id) 
+                code = bash_run([os.path.join(self.network_dir, "setup-wifi-sta.sh"), ssid, password])
+                if code == 0: 
+                    logger.info("WiFi settings changed")
+                    await self.send_status_response(0, "WiFi settings changed", id) 
+                    await self.restart_system(id=id)
+                else: 
+                    logger.warning(f"Failed to change WiFi settings: {e}")
+                    await self.send_status_response(-1, f"Failed to change WiFi settings: {e}", id) 
         else: 
-            await self.send_status_response(-1, "WiFi SSID is not set", id) 
-
+            raise Exception("WiFi SSID is not set") 
+        
 class WebsocketServer(object): 
     def __init__(self, port = 8090): 
         self.port = port 
@@ -346,7 +331,7 @@ class WebsocketServer(object):
         self._thread = None 
 
     # handle client connection
-    async def handler(self, websocket, path):
+    async def handler(self, websocket, *args):
         logger.info(f"Websocket connection from {websocket.remote_address[0]}") 
         connection = WebsocketConnection(websocket)
         self._connections.add(connection)
@@ -354,9 +339,9 @@ class WebsocketServer(object):
             await connection.handle_requests() 
             await websocket.wait_closed()
         except websockets.exceptions.ConnectionClosed as e: 
-            logger.warning(e)
+            logger.warning(f"Connection closed: {e}")
         except Exception as e: 
-            logger.warning(e)
+            logger.warning(f"Connection handler error: {e}")
         finally: 
             logger.error(f"Remove websocket connection from {websocket.remote_address[0]}")
             self._connections.remove(connection)
@@ -391,7 +376,7 @@ from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
 class WebServer(object): 
     class HttpRequestHandler(SimpleHTTPRequestHandler): 
         def __init__(self, *args, **kwargs):
-            super().__init__(*args, **kwargs, directory="web-ui")
+            super().__init__(*args, **kwargs, directory="www")
     
         def do_GET(self):
             logger.info(f"HTTP request for {self.path}")
@@ -458,11 +443,10 @@ def run_service(config_file = None):
     web_server.start() 
 
     try: 
-        logger.warning("Waiting for kill signal...")
         signal.signal(signal.SIGINT, handle_signal) 
         signal.pause() 
     except Exception as e:
-        logger.error(f"Error in waiting: {e}")
+        logger.error(e)
     finally: 
         web_server.stop() 
         ws_server.stop() 

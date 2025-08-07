@@ -10,10 +10,7 @@ echo "VERSION_URL: ${VERSION_URL}"
 PACKAGE_URL="https://github.com/sevenrobots/net-admin/releases/download"
 echo "PACKAGE_URL: ${PACKAGE_URL}" 
 
-SYSTEM_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)" 
-echo "SYSTEM_DIR: ${SYSTEM_DIR}" 
-
-SOFTWARE_DIR="$(cd "${SYSTEM_DIR}/.." && pwd)" 
+SOFTWARE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)" 
 echo "SOFTWARE_DIR: ${SOFTWARE_DIR}" 
 
 UPDATES_DIR="$(cd "${SOFTWARE_DIR}/updates" && pwd)" 
@@ -113,35 +110,48 @@ install_software () {
         return 3
     fi  
 
-    if [ -d "${VERSION_DIR}/web-ui" ]; then 
-        echo "Install web-ui package" 
-        rm -rf "${SOFTWARE_DIR}/web-ui" 
-        mv -f "${VERSION_DIR}/web-ui" "${SOFTWARE_DIR}/web-ui"
-    fi 
-
-    if [ -d "${VERSION_DIR}/web-service" ]; then 
-        echo "Install web-service package" 
-        rm -rf "${SOFTWARE_DIR}/web-service" 
-        mv -f "${VERSION_DIR}/web-service" "${SOFTWARE_DIR}/web-service"
-    fi 
-
-    if [ -d "${VERSION_DIR}/system" ]; then 
-        echo "Install system package" 
-        rm -rf "${SOFTWARE_DIR}/system" 
-        mv -f "${VERSION_DIR}/system" "${SOFTWARE_DIR}/system" 
-        bash "${SOFTWARE_DIR}/system/system-init.sh"     
-    fi 
-
     if [ -d "${VERSION_DIR}/network" ]; then 
-        echo "Install network package" 
+        echo "Update network package" 
         rm -rf "${SOFTWARE_DIR}/network" 
         mv -f "${VERSION_DIR}/network" "${SOFTWARE_DIR}/network" 
         bash "${SOFTWARE_DIR}/network/network-init.sh" 
     fi 
 
-    mv -f "${VERSION_DIR}/VERSION.txt" "${SOFTWARE_DIR}/VERSION.txt"
+    if [ -d "${VERSION_DIR}/system" ]; then 
+        echo "Update system package" 
+        rm -rf "${SOFTWARE_DIR}/system" 
+        mv -f "${VERSION_DIR}/system" "${SOFTWARE_DIR}/system" 
+        bash "${SOFTWARE_DIR}/system/system-init.sh"     
+    fi 
+
+    if [ -d "${VERSION_DIR}/web-ui" ]; then 
+        echo "Update web-ui package" 
+        rm -rf "${SOFTWARE_DIR}/web-ui" 
+        mv -f "${VERSION_DIR}/web-ui" "${SOFTWARE_DIR}/web-ui"
+    fi 
+
+    FILE_NAME="updates.sh" 
+    if [ -f "${VERSION_DIR}/${FILE_NAME}" ]; then 
+        echo "Update ${FILE_NAME}" 
+        mv -f "${VERSION_DIR}/${FILE_NAME}" "${SOFTWARE_DIR}/${FILE_NAME}"
+    fi 
+    FILE_NAME="VERSION.txt" 
+    if [ -f "${VERSION_DIR}/${FILE_NAME}" ]; then 
+        echo "Update ${FILE_NAME}" 
+        mv -f "${VERSION_DIR}/${FILE_NAME}" "${SOFTWARE_DIR}/${FILE_NAME}"
+    fi 
+    FILE_NAME="CHANGES.md" 
+    if [ -f "${VERSION_DIR}/${FILE_NAME}" ]; then 
+        echo "Update ${FILE_NAME}" 
+        mv -f "${VERSION_DIR}/${FILE_NAME}" "${SOFTWARE_DIR}/${FILE_NAME}"
+    fi 
+    FILE_NAME="README.md" 
+    if [ -f "${VERSION_DIR}/${FILE_NAME}" ]; then 
+        echo "Update ${FILE_NAME}" 
+        mv -f "${VERSION_DIR}/${FILE_NAME}" "${SOFTWARE_DIR}/${FILE_NAME}"
+    fi 
     rm -rf "${VERSION_DIR}" 
-    echo "Installed software package ${PACKAGE}"
+    echo "Software package ${PACKAGE} was installed"
 }
 
 case "$1" in
