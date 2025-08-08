@@ -236,6 +236,8 @@ class WebsocketConnection(object):
     async def check_wifi_ap_status(self, params = None, id = None): 
         logger.info("check_wifi_ap_status")
         # check SSID and password 
+        ssid = None 
+        password = None 
         try: 
             ssid, password = check_wifi_ap_id() 
             logger.info(f"{ssid=}") 
@@ -246,13 +248,14 @@ class WebsocketConnection(object):
             logger.warning(f"Error to check WiFi API: {e}")
             await self.send_status_response(-1, f"Error to check WiFi AP: {e}", id)  
         # check IP address 
+        address = None 
         try: 
             address = check_network_addr("uap0")
             logger.info(f"uap0: {address}")
             if address is None: 
                 await self.send_status_response(-1, "WiFi AP is not activated" , id) 
         except Exception as e: 
-            logger.waning(f"Error to check IP address: {e}") 
+            logger.warning(f"Error to check IP address: {e}") 
             await self.send_status_response(-1, f"Error to check IP address: {e}", id)
             
         result = {
@@ -268,6 +271,8 @@ class WebsocketConnection(object):
     async def check_wifi_sta_status(self, params = None, id = None): 
         logger.info("check_wifi_sta_status")
         # check SSID and password
+        ssid = None 
+        password = None 
         try: 
             ssid, password = check_wifi_sta_id() 
             logger.info(f"{ssid=}")
@@ -278,13 +283,14 @@ class WebsocketConnection(object):
             logger.warning(f"Error to check wifi sta: {e}")
             await self.send_status_response(-1, f"Error to check WiFi STA: {e}", id)  
         # check IP address 
+        address = None 
         try: 
             address = check_network_addr("wlan0")
             logger.info(f"wlan0: {address}")
             if address is None: 
                 await self.send_status_response(-1, "WiFi is not connected" , id)
         except Exception as e: 
-            logger.waning(f"Error to check IP address: {e}") 
+            logger.warning(f"Error to check IP address: {e}") 
             await self.send_status_response(-1, f"Error to check IP address: {e}", id)
             
         result = {
@@ -305,7 +311,7 @@ class WebsocketConnection(object):
                 logger.info(f"{current_ssid=}") 
                 logger.info(f"{current_password=}")
             except Exception as e: 
-                logger.waning(f"Error to check wifi settings: {e}")
+                logger.warning(f"Error to check wifi settings: {e}")
 
             if ssid == current_ssid and password == current_password: 
                 await self.send_status_response(-1, "WiFi settings has no change", id)
